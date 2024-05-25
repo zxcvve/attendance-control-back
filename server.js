@@ -5,7 +5,6 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const port = 3000;
 
-// PostgreSQL client setup
 const pool = new Pool({
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
@@ -13,6 +12,7 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   port: 5432,
 });
+
 
 // Middleware to parse JSON requests
 app.use(express.json());
@@ -192,40 +192,40 @@ app.get('/attendanceBySubject', async (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email: login, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Please provide both email and password' });
+  if (!login || !password) {
+    return res.status(400).json({ error: 'Please provide both login and password' });
   }
 
   try {
     // Check if user with provided email exists in the database
-    const userQuery = await pool.query('SELECT * FROM Users WHERE email = $1', [email]);
+    const query = 'SELECT users.*, usersrole.roletitle FROM users LEFT JOIN usersrole ON users.roleid = usersrole.id WHERE users.login = $1';
+    const userQuery = await pool.query(query, [login]);
     const user = userQuery.rows[0];
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Check if the provided password matches the hashed password in the database
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = password === user.password;
 
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Invalid password' });
     }
 
-    // Generate JWT token
-    const token = jwt.sign({ userId: user.id, email: user.email }, 'your_secret_key', { expiresIn: '1h' });
+    // // Generate JWT token
+    // const token = jwt.sign({ userId: user.id, email: user.email }, 'your_secret_key', { expiresIn: '1h' });
 
     // Additional data for teacher
-    let teacherData = {};
-    if (user.role === 'teacher') {
-      const teacherQuery = await pool.query('SELECT * FROM Teacher WHERE userId = $1', [user.id]);
-      teacherData = teacherQuery.rows[0];
-    }
+    // let teacherData = {};
+    // if (user.role === 'teacher') {
+    //   const teacherQuery = await pool.query('SELECT * FROM Teacher WHERE userId = $1', [user.id]);
+    //   teacherData = teacherQuery.rows[0];
+    // }
 
     // Return user data and token
-    res.json({ user: { id: user.id, email: user.email, role: user.role, ...teacherData }, token });
+    res.json({ user: { id: user.id, login: user.login, role: user.roletitle }  });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
